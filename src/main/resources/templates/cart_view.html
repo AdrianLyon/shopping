@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Carrito de Compras</title>
+</head>
+<body>
+    <h1>Tu Carrito</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Precio</th>
+                <th>Subtotal</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="item : ${cartItems}">
+                <td th:text="${item.product.name}"></td>
+                <td th:text="${item.quantity}"></td>
+                <td th:text="${item.product.price}"></td>
+                <td th:text="${#numbers.formatDecimal(item.quantity * item.product.price, 1, 2)}"></td>
+            </tr>
+        </tbody>
+    </table>
+    <a href="/products">Seguir Comprando</a>
+</body>
+</html>

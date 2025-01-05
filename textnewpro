@@ -1,0 +1,288 @@
+package com.example.shoppingcart;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class ShoppingCartApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(ShoppingCartApplication.class, args);
+    }
+}
+
+// Package structure:
+// - controller: Handles web requests
+// - service: Contains business logic
+// - repositories: Handles data persistence
+// - model: Contains JPA entities
+// - dto: Defines data transfer objects
+
+// Example: Structure and initial class definitions
+
+// --- Model ---
+package com.example.shoppingcart.model;
+
+import jakarta.persistence.*;
+import java.util.List;
+
+@Entity
+public class Product {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String name;
+    private String description;
+    private double price;
+
+    // Getters and setters
+}
+
+@Entity
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String username;
+    private String password;
+    private String role;
+
+    // Getters and setters
+}
+
+@Entity
+public class CartItem {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne
+    private Product product;
+
+    private int quantity;
+
+    @ManyToOne
+    private User user;
+
+    // Getters and setters
+}
+
+// --- Repository ---
+package com.example.shoppingcart.repositories;
+
+import com.example.shoppingcart.model.Product;
+import com.example.shoppingcart.model.User;
+import com.example.shoppingcart.model.CartItem;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface ProductRepository extends JpaRepository<Product, Long> {
+}
+
+public interface UserRepository extends JpaRepository<User, Long> {
+    User findByUsername(String username);
+}
+
+public interface CartItemRepository extends JpaRepository<CartItem, Long> {
+    List<CartItem> findByUser(User user);
+}
+
+// --- Service ---
+package com.example.shoppingcart.service;
+
+import com.example.shoppingcart.model.Product;
+import com.example.shoppingcart.model.User;
+import com.example.shoppingcart.model.CartItem;
+import com.example.shoppingcart.repositories.ProductRepository;
+import com.example.shoppingcart.repositories.UserRepository;
+import com.example.shoppingcart.repositories.CartItemRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+public class ProductService {
+    private final ProductRepository productRepository;
+
+    public ProductService(ProductRepository productRepository) {
+        this.productRepository = productRepository;
+    }
+
+    public List<Product> getAllProducts() {
+        return productRepository.findAll();
+    }
+
+    public Product saveProduct(Product product) {
+        return productRepository.save(product);
+    }
+}
+
+@Service
+public class UserService {
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    public User registerUser(String username, String password) {
+        User user = new User();
+        user.setUsername(username);
+        user.setPassword(passwordEncoder.encode(password));
+        user.setRole("USER");
+        return userRepository.save(user);
+    }
+
+    public User findByUsername(String username) {
+        return userRepository.findByUsername(username);
+    }
+}
+
+@Service
+public class CartService {
+    private final CartItemRepository cartItemRepository;
+
+    public CartService(CartItemRepository cartItemRepository) {
+        this.cartItemRepository = cartItemRepository;
+    }
+
+    public List<CartItem> getCartItems(User user) {
+        return cartItemRepository.findByUser(user);
+    }
+
+    public void addToCart(User user, Product product, int quantity) {
+        CartItem cartItem = new CartItem();
+        cartItem.setUser(user);
+        cartItem.setProduct(product);
+        cartItem.setQuantity(quantity);
+        cartItemRepository.save(cartItem);
+    }
+}
+
+// --- Controller ---
+package com.example.shoppingcart.controller;
+
+import com.example.shoppingcart.model.Product;
+import com.example.shoppingcart.model.User;
+import com.example.shoppingcart.model.CartItem;
+import com.example.shoppingcart.service.ProductService;
+import com.example.shoppingcart.service.UserService;
+import com.example.shoppingcart.service.CartService;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
+
+import java.security.Principal;
+import java.util.List;
+
+@Controller
+public class ProductController {
+    private final ProductService productService;
+    private final CartService cartService;
+    private final UserService userService;
+
+    public ProductController(ProductService productService, CartService cartService, UserService userService) {
+        this.productService = productService;
+        this.cartService = cartService;
+        this.userService = userService;
+    }
+
+    @GetMapping("/products")
+    public String listProducts(Model model) {
+        model.addAttribute("products", productService.getAllProducts());
+        return "product_list";
+    }
+
+    @GetMapping("/products/details/{id}")
+    public String productDetails(@PathVariable Long id, Model model) {
+        Product product = productService.getAllProducts().stream()
+            .filter(p -> p.getId().equals(id))
+            .findFirst().orElse(null);
+        model.addAttribute("product", product);
+        return "product_details";
+    }
+
+    @PostMapping("/products/add")
+    public String addProduct(@RequestParam String name, @RequestParam String description, @RequestParam double price) {
+        Product product = new Product();
+        product.setName(name);
+        product.setDescription(description);
+        product.setPrice(price);
+        productService.saveProduct(product);
+        return "redirect:/products";
+    }
+
+    @PostMapping("/cart/add")
+    public String addToCart(@RequestParam Long productId, @RequestParam int quantity, Principal principal) {
+        User user = userService.findByUsername(principal.getName());
+        Product product = productService.getAllProducts().stream().filter(p -> p.getId().equals(productId)).findFirst().orElse(null);
+        cartService.addToCart(user, product, quantity);
+        return "redirect:/cart";
+    }
+
+    @GetMapping("/cart")
+    public String viewCart(Model model, Principal principal) {
+        User user = userService.findByUsername(principal.getName());
+        List<CartItem> cartItems = cartService.getCartItems(user);
+        model.addAttribute("cartItems", cartItems);
+        return "cart_view";
+    }
+
+    @GetMapping("/login")
+    public String login() {
+        return "login";
+    }
+
+    @GetMapping("/register")
+    public String register() {
+        return "register";
+    }
+}
+
+// --- Security Configuration ---
+package com.example.shoppingcart;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+public class SecurityConfig {
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeHttpRequests()
+                .requestMatchers("/products", "/cart", "/cart/add").authenticated()
+                .anyRequest().permitAll()
+            .and()
+            .formLogin()
+                .loginPage("/login").permitAll()
+            .and()
+            .logout()
+                .logoutSuccessUrl("/").permitAll();
+        return http.build();
+    }
+
+    @Bean
+    public void configureGlobal(AuthenticationManagerBuilder auth, UserService userService) throws Exception {
+        auth.userDetailsService(username -> {
+            User user = userService.findByUsername(username);
+            return org.springframework.security.core.userdetails.User.builder()
+                    .username(user.getUsername())
+                    .password(user.getPassword())
+                    .roles(user.getRole())
+                    .build();
+        }).passwordEncoder(passwordEncoder());
+    }
+}
