@@ -3,6 +3,7 @@ package com.code.yaco.services;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.code.yaco.dto.CartItemDTO;
@@ -14,7 +15,7 @@ import com.code.yaco.repositories.CartItemRepository;
 
 @Service
 public class CartService {
-    private final CartItemRepository cartItemRepository;
+    @Autowired CartItemRepository cartItemRepository;
 
     public CartService(CartItemRepository cartItemRepository) {
         this.cartItemRepository = cartItemRepository;
